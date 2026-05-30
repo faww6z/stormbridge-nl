@@ -1,8 +1,8 @@
 import streamlit as st
-import pandas as pd
 
 from src.data_loader import load_all_data
 from src.risk_engine import calculate_action_queue
+from src.report_generator import build_manager_brief
 
 st.set_page_config(
     page_title="StormBridge NL",
@@ -15,8 +15,8 @@ st.subheader("AI Coordination Layer for Storm-Driven Operational Disruption")
 
 st.markdown(
     """
-    StormBridge NL helps organizations coordinate disruption across ports, utilities,
-    mining sites, manufacturing operations, and remote crews by turning scattered
+    StormBridge NL helps Newfoundland and Labrador organizations coordinate storm-driven disruption
+    across ports, utilities, mining sites, and remote industrial operations by turning scattered
     operational data into one risk-ranked action plan.
     """
 )
@@ -24,7 +24,6 @@ st.markdown(
 try:
     data = load_all_data()
     action_queue = calculate_action_queue(data)
-
     weather = data["weather_alerts"].iloc[0]
 
     st.divider()
@@ -37,6 +36,11 @@ try:
     col2.metric("Severity", f"{weather['severity']}/10")
     col3.metric("Wind Speed", f"{weather['wind_kmh']} km/h")
     col4.metric("Region", weather["affected_region"])
+
+    st.caption(
+        f"Active from {weather['start_time']} to {weather['end_time']} | "
+        f"Precipitation: {weather['precipitation_mm']} mm"
+    )
 
     st.divider()
 
@@ -72,6 +76,7 @@ try:
         st.write(f"**Priority:** {top_action['priority']}")
         st.write(f"**Risk Score:** {top_action['risk_score']}/10")
         st.write(f"**Confidence Score:** {top_action['confidence_score']}%")
+        st.write(f"**Resource Gap Score:** {top_action['resource_gap']}")
         st.write(f"**Recommended Action:** {top_action['recommended_action']}")
 
     with right:
@@ -79,35 +84,42 @@ try:
         approve = st.button("Approve recommended action")
 
         if approve:
-            st.success("Action approved. In the full version, this would trigger the dispatch/communication workflow.")
+            st.success("Action approved locally. In a full deployment, this would trigger a controlled workflow.")
 
     st.divider()
 
-    st.header("Available Crews")
+    st.header("Crews & Equipment")
 
-    st.dataframe(data["crews"], use_container_width=True)
+    crew_tab, equipment_tab = st.tabs(["Crews", "Equipment"])
 
-    st.header("Available Equipment")
+    with crew_tab:
+        st.dataframe(data["crews"], use_container_width=True)
 
-    st.dataframe(data["equipment"], use_container_width=True)
+    with equipment_tab:
+        st.dataframe(data["equipment"], use_container_width=True)
 
     st.divider()
 
-    st.header("Draft Manager Brief")
+    st.header("watsonx.ai Manager Brief")
 
-    brief = f"""
-    StormBridge NL has detected a {weather['alert_type']} affecting {weather['affected_region']}.
+    st.markdown(
+        """
+        This brief is generated from the structured risk queue using watsonx.ai.
+        The AI does not dispatch crews or send messages automatically. A human operator must approve actions first.
+        """
+    )
 
-    The highest priority issue is at {top_action['site_name']} in the {top_action['sector']} sector.
-    Current risk score is {top_action['risk_score']}/10 with a confidence score of {top_action['confidence_score']}%.
+    if "manager_brief" not in st.session_state:
+        st.session_state.manager_brief = ""
 
-    Recommended next step:
-    {top_action['recommended_action']}
+    if st.button("Generate manager brief with watsonx.ai"):
+        with st.spinner("Generating manager brief with watsonx.ai..."):
+            st.session_state.manager_brief = build_manager_brief(weather, action_queue)
 
-    Human approval is required before dispatching crews or sending stakeholder communications.
-    """
-
-    st.text_area("Manager Brief Placeholder", brief, height=220)
+    if st.session_state.manager_brief:
+        st.markdown(st.session_state.manager_brief)
+    else:
+        st.info("Click the button above to generate the manager brief.")
 
 except Exception as e:
     st.error("Something went wrong while loading the StormBridge prototype.")
