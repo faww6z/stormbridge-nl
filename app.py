@@ -21,6 +21,23 @@ st.markdown(
     """
 )
 
+with st.sidebar:
+    st.header("Demo Controls")
+
+    mode = st.radio(
+        "Manager brief mode",
+        ["Local mode", "watsonx.ai mode"],
+        help="Local mode works without IBM credentials. watsonx.ai mode generates the brief using IBM watsonx.ai."
+    )
+
+    use_watsonx = mode == "watsonx.ai mode"
+
+    st.markdown("---")
+    st.caption("Prototype sectors:")
+    st.write("• Ocean / Port Operations")
+    st.write("• Energy / Utilities")
+    st.write("• Mining / Remote Industrial Sites")
+
 try:
     data = load_all_data()
     action_queue = calculate_action_queue(data)
@@ -100,21 +117,43 @@ try:
 
     st.divider()
 
-    st.header("watsonx.ai Manager Brief")
+    st.header("Manager Brief")
 
-    st.markdown(
-        """
-        This brief is generated from the structured risk queue using watsonx.ai.
-        The AI does not dispatch crews or send messages automatically. A human operator must approve actions first.
-        """
-    )
+    if use_watsonx:
+        st.markdown(
+            """
+            This brief will be generated using **watsonx.ai** from the structured risk queue.
+            The AI does not dispatch crews or send messages automatically.
+            """
+        )
+    else:
+        st.markdown(
+            """
+            This brief is generated in **local mode**, so teammates can run the app without IBM credentials.
+            """
+        )
 
     if "manager_brief" not in st.session_state:
         st.session_state.manager_brief = ""
 
-    if st.button("Generate manager brief with watsonx.ai"):
-        with st.spinner("Generating manager brief with watsonx.ai..."):
-            st.session_state.manager_brief = build_manager_brief(weather, action_queue)
+    button_label = "Generate manager brief with watsonx.ai" if use_watsonx else "Generate local manager brief"
+
+    if st.button(button_label):
+        with st.spinner("Generating manager brief..."):
+            try:
+                st.session_state.manager_brief = build_manager_brief(
+                    weather,
+                    action_queue,
+                    use_watsonx=use_watsonx
+                )
+            except Exception as brief_error:
+                st.error("watsonx.ai generation failed. Switching to local fallback brief.")
+                st.session_state.manager_brief = build_manager_brief(
+                    weather,
+                    action_queue,
+                    use_watsonx=False
+                )
+                st.exception(brief_error)
 
     if st.session_state.manager_brief:
         st.markdown(st.session_state.manager_brief)
