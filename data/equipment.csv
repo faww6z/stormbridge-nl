@@ -1,0 +1,5 @@
+equipment_id,equipment_name,sector,region,available,status
+E001,Forklift Fleet,Ocean,Eastern Newfoundland,yes,Operational
+E002,Transformer Repair Kit,Energy/Utilities,Eastern Newfoundland,yes,Operational
+E003,Remote Site Generator,Mining,Labrador,no,Awaiting fuel delivery
+E004,Backup Conveyor Motor,Manufacturing,Eastern Newfoundland,yes,Operational

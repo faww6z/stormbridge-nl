@@ -1,0 +1,5 @@
+crew_id,crew_name,sector,region,available,capacity,status
+C001,Port Response Crew,Ocean,Eastern Newfoundland,yes,4,Ready
+C002,Utility Repair Crew A,Energy/Utilities,Eastern Newfoundland,yes,3,Ready
+C003,Mining Field Crew,Mining,Labrador,no,5,Delayed by road conditions
+C004,Manufacturing Maintenance Team,Manufacturing,Eastern Newfoundland,yes,2,On standby

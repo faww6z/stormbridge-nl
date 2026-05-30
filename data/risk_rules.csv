@@ -1,0 +1,7 @@
+factor,weight
+weather_severity,0.30
+site_criticality,0.25
+exposure_level,0.15
+task_urgency,0.15
+safety_impact,0.10
+resource_gap,0.05

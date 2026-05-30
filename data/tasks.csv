@@ -1,0 +1,5 @@
+task_id,site_id,task_name,urgency,safety_impact,cost_impact_hours,requires_crew,requires_equipment
+T001,S001,Secure delayed cargo and adjust berth schedule,8,6,12,yes,yes
+T002,S002,Inspect feeder outage risk and prepare repair response,10,9,6,yes,yes
+T003,S003,Assess road access and protect remote mine equipment,9,10,24,yes,yes
+T004,S004,Reschedule production run due to delayed shipment,6,4,8,yes,yes

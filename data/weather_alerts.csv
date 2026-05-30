@@ -1,0 +1,2 @@
+alert_id,alert_type,severity,wind_kmh,precipitation_mm,affected_region,start_time,end_time
+W001,Winter Storm,9,95,45,Eastern Newfoundland,2026-05-30 08:00,2026-05-30 22:00

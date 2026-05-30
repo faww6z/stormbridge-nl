@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment variables
+.env
+
+# System files
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Outputs
+outputs/

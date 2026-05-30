@@ -1,0 +1,5 @@
+site_id,site_name,sector,region,criticality,exposure_level
+S001,St. Johns Port Operations,Ocean,Eastern Newfoundland,9,8
+S002,Avalon Energy Feeder 12,Energy/Utilities,Eastern Newfoundland,10,7
+S003,Labrador Remote Mine Site,Mining,Labrador,8,9
+S004,Mount Pearl Manufacturing Plant,Manufacturing,Eastern Newfoundland,7,5
