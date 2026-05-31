@@ -11,10 +11,11 @@ def load_csv(filename: str) -> pd.DataFrame:
 
 def load_all_data() -> dict:
     return {
-        "weather_alerts": load_csv("weather_alerts.csv"),
-        "sites": load_csv("sites.csv"),
-        "crews": load_csv("crews.csv"),
-        "equipment": load_csv("equipment.csv"),
-        "tasks": load_csv("tasks.csv"),
-        "risk_rules": load_csv("risk_rules.csv"),
+        "weather_alerts":          load_csv("weather_alerts.csv"),
+        "sites":                   load_csv("sites.csv"),
+        "crews":                   load_csv("crews.csv"),
+        "equipment":               load_csv("equipment.csv"),
+        "tasks":                   load_csv("tasks.csv"),
+        "risk_rules":              load_csv("risk_rules.csv"),
+        "supply_resource_delays":  load_csv("supply_resource_delays.csv"),
     }
