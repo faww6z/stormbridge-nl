@@ -1,11 +1,14 @@
 import os
+import json
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import plotly.graph_objects as go
 from pathlib import Path
 from dotenv import load_dotenv
 
 from src.data_loader import load_all_data
+from src.orchestrate_workflow import build_orchestrate_handoff
 from src.risk_engine import calculate_action_queue, SCENARIO_CREW_COL, SCENARIO_EQUIP_COL
 from src.report_generator import build_manager_brief
 
@@ -356,6 +359,62 @@ def get_data() -> dict:
     return load_all_data()
 
 
+def get_orchestrate_webchat_html() -> str:
+    embed_path = Path(__file__).resolve().parent / "outputs" / "orchestrate_webchat_embed.html"
+    if embed_path.exists():
+        return embed_path.read_text(encoding="utf-8")
+
+    orchestration_id = os.getenv("ORCHESTRATE_WEBCHAT_ORCHESTRATION_ID")
+    host_url = os.getenv("ORCHESTRATE_WEBCHAT_HOST_URL")
+    crn = os.getenv("ORCHESTRATE_WEBCHAT_CRN")
+    agent_id = os.getenv("ORCHESTRATE_WEBCHAT_AGENT_ID")
+
+    if not all([orchestration_id, host_url, crn, agent_id]):
+        return ""
+
+    config = {
+        "orchestrationID": orchestration_id,
+        "hostURL": host_url,
+        "rootElementID": "root",
+        "showLauncher": os.getenv("ORCHESTRATE_WEBCHAT_SHOW_LAUNCHER", "true").lower() == "true",
+        "crn": crn,
+        "deploymentPlatform": "ibmcloud",
+        "chatOptions": {
+            "agentId": agent_id,
+        },
+    }
+
+    return f"""
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          html, body, #root {{
+            min-height: 620px;
+            margin: 0;
+            background: #0f172a;
+          }}
+        </style>
+      </head>
+      <body>
+        <div id="root"></div>
+        <script>
+          window.wxOConfiguration = {json.dumps(config)};
+          setTimeout(function () {{
+            const script = document.createElement("script");
+            script.src = `${{window.wxOConfiguration.hostURL}}/wxochat/wxoLoader.js?embed=true`;
+            script.addEventListener("load", function () {{
+              wxoLoader.init();
+            }});
+            document.head.appendChild(script);
+          }}, 0);
+        </script>
+      </body>
+    </html>
+    """
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 def render_hero_header():
@@ -627,7 +686,7 @@ st.markdown("")
 
 (
     tab_storm, tab_sites, tab_queue,
-    tab_crews, tab_brief, tab_approval,
+    tab_crews, tab_brief, tab_approval, tab_orchestrate,
 ) = st.tabs([
     "Storm Alert",
     "Sites at Risk",
@@ -635,6 +694,7 @@ st.markdown("")
     "Crews & Equipment",
     "Manager Brief",
     "Human Approval",
+    "Orchestrate Workflow",
 ])
 
 
@@ -1106,3 +1166,145 @@ with tab_approval:
                 "and stakeholder communications via IBM watsonx Orchestrate.",
                 icon="✅",
             )
+
+
+# ── TAB 7 · watsonx Orchestrate Handoff ───────────────────────────────────
+
+with tab_orchestrate:
+    st.subheader("watsonx Orchestrate Handoff")
+    st.caption(
+        "Controlled workflow payload for the response coordinator agent. "
+        "The handoff stays blocked until human approval is recorded."
+    )
+
+    if top_action is None:
+        st.info("No action is available for this scenario.", icon="ℹ️")
+    else:
+        candidate_actions = aq_raw[aq_raw["priority"].isin(["Critical", "High"])].copy()
+        if candidate_actions.empty:
+            candidate_actions = aq_raw.copy()
+
+        selected_task_id = st.selectbox(
+            "Action to hand off",
+            candidate_actions["task_id"].tolist(),
+            format_func=lambda task_id: (
+                f"{task_id} · "
+                f"{candidate_actions[candidate_actions['task_id'] == task_id].iloc[0]['site_name']} · "
+                f"{candidate_actions[candidate_actions['task_id'] == task_id].iloc[0]['priority']}"
+            ),
+        )
+
+        selected_action = candidate_actions[
+            candidate_actions["task_id"] == selected_task_id
+        ].iloc[0]
+
+        system_pending_for_scenario = data["tasks"][
+            (data["tasks"]["scenario"] == scenario_key)
+            & (data["tasks"]["human_approved"].str.upper() == "NO")
+        ].copy()
+        pending_approval_keys = [
+            f"sys_{task_id}" for task_id in system_pending_for_scenario["task_id"].tolist()
+        ]
+        pending_system_approved = all(
+            st.session_state.approvals.get(key, False) for key in pending_approval_keys
+        ) if pending_approval_keys else True
+
+        action_already_approved = (
+            str(selected_action.get("human_approved", "")).upper() == "YES"
+            or "COMPLETED" in str(selected_action.get("task_status", "")).upper()
+            or st.session_state.approvals.get(f"rq_{selected_task_id}", False)
+        )
+
+        approved_for_handoff = bool(action_already_approved and pending_system_approved)
+
+        payload = build_orchestrate_handoff(
+            data=data,
+            scenario=scenario_key,
+            task_id=selected_task_id,
+            approved=approved_for_handoff,
+        )
+
+        status_col, agent_col, guardrail_col = st.columns(3)
+        with status_col:
+            st.metric("Handoff Status", payload["handoff_status"])
+        with agent_col:
+            st.metric("Target Agent", os.getenv("ORCHESTRATE_AGENT_NAME", "stormbridge_response_coordinator"))
+        with guardrail_col:
+            st.metric("Approval Gate", "Open" if approved_for_handoff else "Blocked")
+
+        if approved_for_handoff:
+            st.success(
+                "This action is ready for an Orchestrate response workflow. "
+                "In production, the agent would prepare controlled dispatch and communication steps.",
+                icon="✅",
+            )
+        else:
+            st.warning(
+                "The Orchestrate handoff is blocked until pending human approvals are completed.",
+                icon="⚠️",
+            )
+
+        webchat_html = get_orchestrate_webchat_html()
+        if webchat_html:
+            with st.expander("Live Orchestrate Webchat", expanded=True):
+                components.html(webchat_html, height=680, scrolling=True)
+        else:
+            st.info(
+                "Live webchat embed is not configured locally. Generate it with "
+                "`orchestrate channels webchat embed --agent-name stormbridge_response_coordinator --env draft` "
+                "and save it to `outputs/orchestrate_webchat_embed.html`, or set the "
+                "`ORCHESTRATE_WEBCHAT_*` variables in `.env`.",
+                icon="ℹ️",
+            )
+
+        st.markdown("#### Workflow Steps")
+        st.dataframe(
+            pd.DataFrame(payload["workflow_steps"]),
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "step": st.column_config.TextColumn("Step"),
+                "owner": st.column_config.TextColumn("Owner"),
+                "status": st.column_config.TextColumn("Status"),
+                "description": st.column_config.TextColumn("Description", width="large"),
+            },
+        )
+
+        packet_tab, update_tab, payload_tab = st.tabs([
+            "Dispatch Packet",
+            "Stakeholder Update",
+            "Tool Payload",
+        ])
+
+        with packet_tab:
+            st.text_area(
+                "Dispatch packet draft",
+                value=payload["dispatch_packet"],
+                height=300,
+            )
+
+        with update_tab:
+            st.text_area(
+                "Stakeholder update draft",
+                value=payload["stakeholder_update"],
+                height=240,
+            )
+
+        with payload_tab:
+            compact_payload = {
+                "workflow_name": payload["workflow_name"],
+                "scenario": payload["scenario"],
+                "handoff_status": payload["handoff_status"],
+                "human_approval_required": payload["human_approval_required"],
+                "approved_in_stormbridge": payload["approved_in_stormbridge"],
+                "storm": payload["storm"],
+                "action": payload["action"],
+                "critical_delays": payload["critical_delays"],
+                "workflow_steps": payload["workflow_steps"],
+            }
+            st.code(json.dumps(compact_payload, indent=2), language="json")
+
+        st.caption(
+            "Live deployment uses the ADK tool package in `orchestrate_tools/`. "
+            "The app preview is intentionally side-effect free."
+        )
